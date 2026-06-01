@@ -24,6 +24,7 @@ const IdeaCard = ({ idea }) => {
             href={idea.original_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="text-slate-500 hover:text-white transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
