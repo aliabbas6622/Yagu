@@ -1,4 +1,6 @@
-CREATE TABLE ideas (
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS public.ideas (
   id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   source           TEXT NOT NULL,
   original_url     TEXT UNIQUE NOT NULL,
@@ -16,6 +18,11 @@ CREATE TABLE ideas (
   sent_in_digest   BOOLEAN DEFAULT FALSE
 );
 
+ALTER TABLE public.ideas ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE public.ideas FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ideas TO service_role;
+
 -- Index for fast digest queries
-CREATE INDEX idx_total_score ON ideas (total_score DESC);
-CREATE INDEX idx_digest ON ideas (sent_in_digest, total_score DESC);
+CREATE INDEX IF NOT EXISTS idx_ideas_total_score ON public.ideas (total_score DESC);
+CREATE INDEX IF NOT EXISTS idx_ideas_digest ON public.ideas (sent_in_digest, total_score DESC);

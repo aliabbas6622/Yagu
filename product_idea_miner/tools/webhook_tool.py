@@ -1,7 +1,22 @@
 import requests
+import logging
 from typing import List
+from tenacity import retry, stop_after_attempt, wait_exponential
 from product_idea_miner.config.models import IdeaRecord
-from product_idea_miner.config.settings import DISCORD_WEBHOOK_URL, SLACK_WEBHOOK_URL
+from product_idea_miner.config.settings import (
+    DISCORD_WEBHOOK_URL,
+    REQUEST_TIMEOUT_SECONDS,
+    RETRY_ATTEMPTS,
+    RETRY_WAIT_SECONDS,
+    SLACK_WEBHOOK_URL,
+)
+
+logger = logging.getLogger(__name__)
+
+@retry(reraise=True, stop=stop_after_attempt(RETRY_ATTEMPTS), wait=wait_exponential(multiplier=RETRY_WAIT_SECONDS, min=1, max=30))
+def _post_webhook(url: str, payload: dict) -> None:
+    response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT_SECONDS)
+    response.raise_for_status()
 
 def send_to_discord(idea: IdeaRecord):
     """
@@ -25,9 +40,9 @@ def send_to_discord(idea: IdeaRecord):
 
     payload = {"embeds": [embed]}
     try:
-        requests.post(DISCORD_WEBHOOK_URL, json=payload)
-    except Exception as e:
-        print(f"Failed to send to Discord: {e}")
+        _post_webhook(DISCORD_WEBHOOK_URL, payload)
+    except Exception:
+        logger.exception("Failed to send to Discord")
 
 def send_to_slack(idea: IdeaRecord):
     """
@@ -72,9 +87,9 @@ def send_to_slack(idea: IdeaRecord):
 
     payload = {"blocks": blocks}
     try:
-        requests.post(SLACK_WEBHOOK_URL, json=payload)
-    except Exception as e:
-        print(f"Failed to send to Slack: {e}")
+        _post_webhook(SLACK_WEBHOOK_URL, payload)
+    except Exception:
+        logger.exception("Failed to send to Slack")
 
 def notify_all(idea: IdeaRecord):
     send_to_discord(idea)

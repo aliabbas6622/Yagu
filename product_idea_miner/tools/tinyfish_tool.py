@@ -2,16 +2,31 @@ import requests
 import json
 import time
 import urllib.parse
+import logging
 from typing import List
+from tenacity import retry, stop_after_attempt, wait_exponential
 from product_idea_miner.config.models import RawPost, Source
-from product_idea_miner.config.settings import TINYFISH_API_KEY
+from product_idea_miner.config.settings import (
+    REQUEST_TIMEOUT_SECONDS,
+    RETRY_ATTEMPTS,
+    RETRY_WAIT_SECONDS,
+    TINYFISH_API_KEY,
+)
+
+logger = logging.getLogger(__name__)
+
+@retry(reraise=True, stop=stop_after_attempt(RETRY_ATTEMPTS), wait=wait_exponential(multiplier=RETRY_WAIT_SECONDS, min=1, max=30))
+def _request_json(method: str, url: str, **kwargs):
+    response = requests.request(method, url, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
+    response.raise_for_status()
+    return response.json()
 
 def scrape_quora(search_queries: List[str]) -> List[RawPost]:
     """
     Scrapes Quora using TinyFish Agent API.
     """
     if not TINYFISH_API_KEY:
-        print("TINYFISH_API_KEY not set, skipping Quora scrape.")
+        logger.info("TINYFISH_API_KEY not set, skipping Quora scrape.")
         return []
 
     headers = {
@@ -32,27 +47,23 @@ def scrape_quora(search_queries: List[str]) -> List[RawPost]:
         }
 
         try:
-            response = requests.post("https://api.tinyfish.ai/v1/agent/run", headers=headers, json=payload)
-            response.raise_for_status()
-            run_data = response.json()
+            run_data = _request_json("POST", "https://api.tinyfish.ai/v1/agent/run", headers=headers, json=payload)
             run_id = run_data.get("run_id")
 
             if not run_id:
-                print(f"Failed to get run_id for query: {query}")
+                logger.warning("Failed to get run_id for query: %s", query)
                 continue
 
             # Polling for completion
             result_json = None
             for _ in range(30): # Poll for up to 5 minutes
-                poll_resp = requests.get(f"https://api.tinyfish.ai/v1/agent/run/{run_id}", headers=headers)
-                poll_resp.raise_for_status()
-                poll_data = poll_resp.json()
+                poll_data = _request_json("GET", f"https://api.tinyfish.ai/v1/agent/run/{run_id}", headers=headers)
 
                 if poll_data.get("status") == "completed":
                     result_json = poll_data.get("output")
                     break
                 elif poll_data.get("status") == "failed":
-                    print(f"TinyFish run failed for query: {query}")
+                    logger.warning("TinyFish run failed for query: %s", query)
                     break
 
                 time.sleep(10)
@@ -69,7 +80,7 @@ def scrape_quora(search_queries: List[str]) -> List[RawPost]:
                         elif "```" in result_json:
                             questions = json.loads(result_json.split("```")[1].split("```")[0])
                         else:
-                            print(f"Could not parse JSON from TinyFish output for query: {query}")
+                            logger.warning("Could not parse JSON from TinyFish output for query: %s", query)
                             continue
                 else:
                     questions = result_json
@@ -87,7 +98,7 @@ def scrape_quora(search_queries: List[str]) -> List[RawPost]:
                         raw_posts.append(raw_post)
                         seen_urls.add(q_url)
 
-        except Exception as e:
-            print(f"Error scraping Quora for query '{query}': {e}")
+        except Exception:
+            logger.exception("Error scraping Quora for query %r", query)
 
     return raw_posts

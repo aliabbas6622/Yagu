@@ -1,16 +1,45 @@
 import json
+import logging
+import os
 from typing import Optional
 from crewai import Agent, Task, Crew, Process
+from tenacity import retry, stop_after_attempt, wait_exponential
 from product_idea_miner.config.models import RawPost, AnalysisResult, ProductIdea
-from product_idea_miner.config.settings import ANTHROPIC_API_KEY
+from product_idea_miner.config.settings import (
+    AI_MODEL,
+    AI_PROVIDER_DEFAULT_MODELS,
+    ANTHROPIC_API_KEY,
+    GEMINI_API_KEY,
+    GROQ_API_KEY,
+    LLM_ANALYSIS_RETRIES,
+    OPENAI_API_KEY,
+    OPENROUTER_API_KEY,
+    RETRY_WAIT_SECONDS,
+    XAI_API_KEY,
+)
 
-# LiteLLM is used by CrewAI, we just need to ensure the API key is in the environment
-import os
-os.environ["ANTHROPIC_API_KEY"] = ANTHROPIC_API_KEY or ""
+logger = logging.getLogger(__name__)
+
+for key, value in {
+    "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
+    "GEMINI_API_KEY": GEMINI_API_KEY,
+    "GROQ_API_KEY": GROQ_API_KEY,
+    "OPENAI_API_KEY": OPENAI_API_KEY,
+    "OPENROUTER_API_KEY": OPENROUTER_API_KEY,
+    "XAI_API_KEY": XAI_API_KEY,
+}.items():
+    if value:
+        os.environ.setdefault(key, value)
 
 def build_crew() -> Crew:
-    # Use claude-3-5-sonnet via LiteLLM/Anthropic
-    llm = "anthropic/claude-3-5-sonnet-20241022"
+    if not AI_MODEL:
+        supported = ", ".join(sorted(AI_PROVIDER_DEFAULT_MODELS))
+        raise ValueError(
+            "No AI model configured. Set AI_MODEL to any LiteLLM model string, "
+            f"or set AI_PROVIDER to one of: {supported}."
+        )
+
+    llm = AI_MODEL
 
     # AGENT 1 — Pain Point Researcher
     researcher = Agent(
@@ -97,6 +126,7 @@ def clean_json_string(s: str) -> str:
         s = s.split("```")[1].split("```")[0]
     return s.strip()
 
+@retry(reraise=True, stop=stop_after_attempt(LLM_ANALYSIS_RETRIES), wait=wait_exponential(multiplier=RETRY_WAIT_SECONDS, min=1, max=30))
 def analyze_post(post: RawPost) -> AnalysisResult:
     """
     Runs the CrewAI analysis on a single post.
@@ -129,10 +159,10 @@ def analyze_post(post: RawPost) -> AnalysisResult:
             category=scoring_out.get("category"),
             target_audience=scoring_out.get("target_audience")
         )
-    except Exception as e:
-        print(f"Error parsing CrewAI output: {e}")
+    except Exception:
+        logger.exception("Error parsing CrewAI output for post %s", post.url)
         # Log the raw outputs for debugging
-        print(f"Research raw: {result.tasks_output[0].raw}")
-        print(f"Scoring raw: {result.tasks_output[1].raw}")
-        print(f"Ideation raw: {result.tasks_output[2].raw}")
+        logger.debug("Research raw: %s", result.tasks_output[0].raw)
+        logger.debug("Scoring raw: %s", result.tasks_output[1].raw)
+        logger.debug("Ideation raw: %s", result.tasks_output[2].raw)
         return AnalysisResult(is_pain_point=False)

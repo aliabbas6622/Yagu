@@ -1,8 +1,9 @@
-import sys
 import os
+import sys
 
-# Add current directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add the parent directory so product_idea_miner imports resolve when this
+# script is run from either the repo root or its parent folder.
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from product_idea_miner.config import models, settings

@@ -1,7 +1,18 @@
 import requests
+import logging
 from typing import List
 from datetime import datetime
+from tenacity import retry, stop_after_attempt, wait_exponential
 from product_idea_miner.config.models import RawPost, Source
+from product_idea_miner.config.settings import REQUEST_TIMEOUT_SECONDS, RETRY_ATTEMPTS, RETRY_WAIT_SECONDS
+
+logger = logging.getLogger(__name__)
+
+@retry(reraise=True, stop=stop_after_attempt(RETRY_ATTEMPTS), wait=wait_exponential(multiplier=RETRY_WAIT_SECONDS, min=1, max=30))
+def _get_json(url: str):
+    response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+    response.raise_for_status()
+    return response.json()
 
 def scrape_hn(limit: int = 50) -> List[RawPost]:
     """
@@ -11,14 +22,10 @@ def scrape_hn(limit: int = 50) -> List[RawPost]:
     raw_posts = []
     try:
         # Get top story IDs
-        response = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json")
-        response.raise_for_status()
-        story_ids = response.json()[:limit]
+        story_ids = _get_json("https://hacker-news.firebaseio.com/v0/topstories.json")[:limit]
 
         for story_id in story_ids:
-            story_resp = requests.get(f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json")
-            story_resp.raise_for_status()
-            story = story_resp.json()
+            story = _get_json(f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json")
 
             if not story:
                 continue
@@ -36,7 +43,7 @@ def scrape_hn(limit: int = 50) -> List[RawPost]:
                     created_at=datetime.fromtimestamp(story.get("time", 0))
                 )
                 raw_posts.append(raw_post)
-    except Exception as e:
-        print(f"Error scraping Hacker News: {e}")
+    except Exception:
+        logger.exception("Error scraping Hacker News")
 
     return raw_posts

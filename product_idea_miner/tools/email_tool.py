@@ -1,10 +1,14 @@
 import smtplib
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from typing import List
+from tenacity import retry, stop_after_attempt, wait_exponential
 from product_idea_miner.config.models import IdeaRecord
 from product_idea_miner.config.settings import (
+    RETRY_ATTEMPTS,
+    RETRY_WAIT_SECONDS,
     SMTP_HOST,
     SMTP_PORT,
     SMTP_USER,
@@ -12,16 +16,25 @@ from product_idea_miner.config.settings import (
     RECIPIENT_EMAIL
 )
 
+logger = logging.getLogger(__name__)
+
+@retry(reraise=True, stop=stop_after_attempt(RETRY_ATTEMPTS), wait=wait_exponential(multiplier=RETRY_WAIT_SECONDS, min=1, max=30))
+def _send_message(msg: MIMEMultipart) -> None:
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.send_message(msg)
+
 def send_digest_email(ideas: List[IdeaRecord], recipient: str = RECIPIENT_EMAIL) -> bool:
     """
     Sends an HTML email digest of product ideas.
     """
     if not ideas:
-        print("No ideas to send in digest.")
+        logger.info("No ideas to send in digest.")
         return False
 
     if not all([SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, recipient]):
-        print("Email configuration incomplete. Skipping digest email.")
+        logger.warning("Email configuration incomplete. Skipping digest email.")
         return False
 
     today = datetime.now().strftime("%Y-%m-%d")
@@ -94,12 +107,9 @@ def send_digest_email(ideas: List[IdeaRecord], recipient: str = RECIPIENT_EMAIL)
     msg.attach(MIMEText(html, "html"))
 
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
-        print(f"Digest email sent successfully to {recipient}")
+        _send_message(msg)
+        logger.info("Digest email sent successfully to %s", recipient)
         return True
-    except Exception as e:
-        print(f"Failed to send digest email: {e}")
+    except Exception:
+        logger.exception("Failed to send digest email")
         return False

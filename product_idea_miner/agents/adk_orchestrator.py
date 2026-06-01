@@ -1,4 +1,5 @@
 import time
+import logging
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from google.adk import Agent
@@ -6,16 +7,19 @@ from google.adk.tools import FunctionTool
 from product_idea_miner.agents.langgraph_pipeline import run_pipeline
 from product_idea_miner.tools import supabase_tool, email_tool, export_tool
 from product_idea_miner.config.settings import (
+    ORCHESTRATOR_MODEL,
     RUN_INTERVAL_HOURS,
     TOP_IDEAS_PER_DIGEST,
     RECIPIENT_EMAIL
 )
 
+logger = logging.getLogger(__name__)
+
 def pipeline_task():
     """
     Function to be called by ADK or Scheduler to run the pipeline.
     """
-    print(f"[{datetime.now()}] Starting Pipeline Task...")
+    logger.info("Starting pipeline task")
     try:
         final_state = run_pipeline()
         return f"Pipeline completed. Scraped: {len(final_state.raw_posts)}, Saved: {final_state.saved_count}"
@@ -26,7 +30,7 @@ def digest_task():
     """
     Function to be called by ADK or Scheduler to send the daily digest.
     """
-    print(f"[{datetime.now()}] Starting Digest Task...")
+    logger.info("Starting digest task")
     try:
         ideas = supabase_tool.get_unsent_ideas(limit=TOP_IDEAS_PER_DIGEST)
         if ideas:
@@ -59,7 +63,7 @@ def build_orchestrator():
     # Root Orchestrator Agent
     orchestrator = Agent(
         name="ProductIdeaMinerOrchestrator",
-        model="gemini-2.0-flash", # Google ADK default
+        model=ORCHESTRATOR_MODEL,
         instructions=(
             "You are an orchestrator for a product idea mining system. "
             "Your job is to: "
@@ -77,13 +81,13 @@ def run_orchestrator_command(command: str):
     Tells the ADK orchestrator agent to perform a specific action.
     """
     orchestrator = build_orchestrator()
-    print(f"[{datetime.now()}] Orchestrator received command: {command}")
+    logger.info("Orchestrator received command: %s", command)
     # In a real ADK setup, you might use a Runner or a Session.
     # Here we use a simple run call to let the agent decide which tool to call.
     response = orchestrator.run(command)
     # response is a list of Messages, the last one is the agent's final answer
     if response:
-        print(f"Orchestrator response: {response[-1].text}")
+        logger.info("Orchestrator response: %s", response[-1].text)
 
 def main():
     scheduler = BackgroundScheduler()
@@ -106,7 +110,7 @@ def main():
     )
 
     scheduler.start()
-    print(f"Product Idea Miner is running... (Pipeline every {RUN_INTERVAL_HOURS}h, Digest at 08:00)")
+    logger.info("Product Idea Miner is running... (Pipeline every %sh, Digest at 08:00)", RUN_INTERVAL_HOURS)
 
     # Also run once on startup for development/verification
     # print("Running initial pipeline on startup...")
