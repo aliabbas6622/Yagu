@@ -2,7 +2,7 @@ import logging
 from typing import List
 from supabase import create_client, Client
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from product_idea_miner.config.models import RawPost, IdeaRecord, ProductIdea
+from product_idea_miner.config.models import RawPost, IdeaRecord, ProductIdea, StartupRaw, StartupRecord
 from product_idea_miner.config.settings import (
     RETRY_ATTEMPTS,
     RETRY_WAIT_SECONDS,
@@ -45,6 +45,45 @@ def check_duplicates(posts: List[RawPost]) -> List[RawPost]:
     logger.info("Found %s duplicate Reddit/source URLs", len(existing_urls))
 
     return [post for post in posts if post.url not in existing_urls]
+
+@_retry_db()
+def check_startup_duplicates(startups: List[StartupRaw]) -> List[StartupRaw]:
+    """
+    Returns only startups NOT already in the database.
+    """
+    if not startups:
+        return []
+
+    supabase = get_supabase_client()
+    urls = [s.url for s in startups]
+
+    # Supabase query to find existing URLs
+    response = supabase.table("startups").select("url").in_("url", urls).execute()
+    existing_urls = {item["url"] for item in response.data}
+    logger.info("Found %s duplicate startup URLs", len(existing_urls))
+
+    return [s for s in startups if s.url not in existing_urls]
+
+@_retry_db()
+def save_startups(startups: List[StartupRecord]) -> int:
+    """
+    Saves a list of StartupRecords to Supabase.
+    """
+    if not startups:
+        return 0
+
+    supabase = get_supabase_client()
+    data_to_insert = []
+
+    for startup in startups:
+        startup_dict = startup.model_dump(exclude={"id"})
+        # date_found to ISO string
+        startup_dict["date_found"] = startup.date_found.isoformat()
+        data_to_insert.append(startup_dict)
+
+    response = supabase.table("startups").upsert(data_to_insert, on_conflict="url").execute()
+    logger.info("Saved %s startups to Supabase", len(response.data))
+    return len(response.data)
 
 @_retry_db()
 def save_ideas(ideas: List[IdeaRecord]) -> int:

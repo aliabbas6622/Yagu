@@ -14,6 +14,7 @@ class AppSettings(BaseSettings):
     # TinyFish
     tinyfish_api_key: str | None = None
     quora_scrape_enabled: bool = False
+    startup_scrape_enabled: bool = True
 
     # AI providers
     anthropic_api_key: str | None = None
@@ -82,6 +83,16 @@ REDDIT_USE_SCRAPLING_FALLBACK = settings.reddit_use_scrapling_fallback
 # TinyFish
 TINYFISH_API_KEY = settings.tinyfish_api_key
 QUORA_SCRAPE_ENABLED = settings.quora_scrape_enabled
+STARTUP_SCRAPE_ENABLED = settings.startup_scrape_enabled
+
+STARTUP_SOURCES = [
+    {"country": "India", "url": "https://www.startupindia.gov.in"},
+    {"country": "UK", "url": "https://technation.io"},
+    {"country": "Nordics", "url": "https://thehub.io"},
+    {"country": "Europe", "url": "https://www.eu-startups.com/directory"},
+    {"country": "Global", "url": "https://fi.co"},
+    {"country": "Global", "url": "https://www.startupblink.com"},
+]
 
 # AI provider keys
 ANTHROPIC_API_KEY = settings.anthropic_api_key
