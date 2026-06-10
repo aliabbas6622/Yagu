@@ -11,7 +11,7 @@ from product_idea_miner.config.settings import (
     LLM_ANALYSIS_RETRIES,
     RETRY_WAIT_SECONDS,
 )
-from product_idea_miner.agents.crewai_crew import clean_json_string
+from product_idea_miner.agents.crewai_crew import parse_llm_output
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +36,13 @@ def build_startup_crew() -> Crew:
             "Description: {description}\n"
             "URL: {url}\n"
             "Country: {country}\n\n"
-            "Evaluate and provide scores (1-10) for: innovation_score, market_potential_score, and execution_score (based on their landing page/description). "
+            "Evaluate and provide scores (1-10) for: innovation_score, market_potential_score, and execution_score. "
             "Calculate total_rating (sum of scores). "
-            "Provide a brief summary (2-3 sentences) of your analysis. "
-            "Determine the startup's category (e.g., AI, SaaS, FinTech, HealthTech, etc.). "
-            "Identify or confirm the country. "
-            "Return JSON with: innovation_score, market_potential_score, execution_score, total_rating, summary, country, category."
+            "Provide a brief summary of your analysis. "
+            "Determine the startup's category and confirm the country. "
+            "Return TOON format with: innovation_score, market_potential_score, execution_score, total_rating, summary, country, category."
         ),
-        expected_output="A JSON object with startup analysis and ratings.",
+        expected_output="TOON data with startup analysis and ratings.",
         agent=analyst
     )
 
@@ -68,8 +67,7 @@ def analyze_startup(startup: StartupRaw) -> StartupRecord:
     })
 
     try:
-        analysis_out_raw = clean_json_string(result.raw)
-        analysis_out = json.loads(analysis_out_raw)
+        analysis_out = parse_llm_output(result.raw)
 
         return StartupRecord(
             name=startup.name,

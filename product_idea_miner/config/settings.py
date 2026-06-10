@@ -90,6 +90,8 @@ STARTUP_SOURCES = [
     {"country": "UK", "url": "https://technation.io"},
     {"country": "Nordics", "url": "https://thehub.io"},
     {"country": "Europe", "url": "https://www.eu-startups.com/directory"},
+    {"country": "Global", "url": "https://fi.co"},
+    {"country": "Global", "url": "https://www.startupblink.com"},
 ]
 
 # AI provider keys
