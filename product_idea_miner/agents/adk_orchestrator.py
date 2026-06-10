@@ -22,7 +22,11 @@ def pipeline_task():
     logger.info("Starting pipeline task")
     try:
         final_state = run_pipeline()
-        return f"Pipeline completed. Scraped: {len(final_state.raw_posts)}, Saved: {final_state.saved_count}"
+        return (
+            f"Pipeline completed. "
+            f"Pain Points: Scraped {len(final_state.raw_posts)}, Saved {len(final_state.analyzed_ideas)}. "
+            f"Startups: Scraped {len(final_state.raw_startups)}, Saved {len(final_state.analyzed_startups)}."
+        )
     except Exception as e:
         return f"Pipeline failed: {str(e)}"
 

@@ -14,10 +14,11 @@ from product_idea_miner.config.settings import (
     QUORA_SCRAPE_ENABLED,
     QUORA_SEARCHES,
     SAVE_MANUAL_CANDIDATES,
+    STARTUP_SCRAPE_ENABLED,
     SUBREDDITS,
 )
-from product_idea_miner.tools import reddit_tool, tinyfish_tool, supabase_tool, hn_tool, webhook_tool
-from product_idea_miner.agents import crewai_crew
+from product_idea_miner.tools import reddit_tool, tinyfish_tool, supabase_tool, hn_tool, webhook_tool, startup_tool
+from product_idea_miner.agents import crewai_crew, startup_analyzer
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ def _manual_candidate_record(post, score: int) -> IdeaRecord:
     )
 
 def scrape_node(state: PipelineState) -> PipelineState:
-    logger.info("Scraping sources")
+    logger.info("Scraping sources for pain points")
     reddit_posts = reddit_tool.scrape_reddit(SUBREDDITS, PAIN_POINT_KEYWORDS)
     quora_posts = tinyfish_tool.scrape_quora(QUORA_SEARCHES) if QUORA_SCRAPE_ENABLED else []
     hn_posts = hn_tool.scrape_hn()
@@ -93,6 +94,11 @@ def scrape_node(state: PipelineState) -> PipelineState:
         len(quora_posts),
         len(hn_posts),
     )
+
+    logger.info("Scraping sources for recently launched startups")
+    state.raw_startups = startup_tool.scrape_recent_startups(limit=5) if STARTUP_SCRAPE_ENABLED else []
+    logger.info("Scraped %s startups", len(state.raw_startups))
+
     return state
 
 def dedup_node(state: PipelineState) -> PipelineState:
@@ -100,6 +106,12 @@ def dedup_node(state: PipelineState) -> PipelineState:
     new_posts = supabase_tool.check_duplicates(state.raw_posts)
     state.deduplicated_posts = new_posts
     logger.info("%s duplicates removed. %s new posts to analyze.", len(state.raw_posts) - len(new_posts), len(new_posts))
+
+    logger.info("Deduplicating startups")
+    new_startups = supabase_tool.check_startup_duplicates(state.raw_startups)
+    state.deduplicated_startups = new_startups
+    logger.info("%s startup duplicates removed. %s new startups to analyze.", len(state.raw_startups) - len(new_startups), len(new_startups))
+
     return state
 
 def analyze_node(state: PipelineState) -> PipelineState:
@@ -173,25 +185,50 @@ def analyze_node(state: PipelineState) -> PipelineState:
 
     state.analyzed_ideas = analyzed_ideas
     logger.info("%s ideas passed the filter.", len(analyzed_ideas))
+
+    logger.info("Analyzing startups")
+    analyzed_startups = []
+    for startup in state.deduplicated_startups:
+        try:
+            result = startup_analyzer.analyze_startup(startup)
+            if result:
+                analyzed_startups.append(result)
+        except Exception as e:
+            logger.exception("Error analyzing startup %s", startup.url)
+            state.errors.append(f"Startup analysis error for {startup.url}: {str(e)}")
+
+    state.analyzed_startups = analyzed_startups
+    logger.info("%s startups analyzed.", len(analyzed_startups))
+
     return state
 
 def save_node(state: PipelineState) -> PipelineState:
     logger.info("Saving ideas")
+    saved_ideas_count = 0
     if state.analyzed_ideas:
-        saved_count = supabase_tool.save_ideas(state.analyzed_ideas)
-        state.saved_count = saved_count
-        logger.info("Saved %s new ideas to database.", saved_count)
+        saved_ideas_count = supabase_tool.save_ideas(state.analyzed_ideas)
+        logger.info("Saved %s new ideas to database.", saved_ideas_count)
     else:
         logger.info("No ideas to save.")
+
+    logger.info("Saving startups")
+    saved_startups_count = 0
+    if state.analyzed_startups:
+        saved_startups_count = supabase_tool.save_startups(state.analyzed_startups)
+        logger.info("Saved %s new startups to database.", saved_startups_count)
+    else:
+        logger.info("No startups to save.")
+
+    state.saved_count = saved_ideas_count + saved_startups_count
     return state
 
 def should_continue_after_dedup(state: PipelineState):
-    if not state.deduplicated_posts:
+    if not state.deduplicated_posts and not state.deduplicated_startups:
         return "end"
     return "analyze"
 
 def should_continue_after_analyze(state: PipelineState):
-    if not state.analyzed_ideas:
+    if not state.analyzed_ideas and not state.analyzed_startups:
         return "end"
     return "save"
 
