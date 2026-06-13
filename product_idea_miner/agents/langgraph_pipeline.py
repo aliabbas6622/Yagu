@@ -15,8 +15,20 @@ from product_idea_miner.config.settings import (
     QUORA_SEARCHES,
     SAVE_MANUAL_CANDIDATES,
     SUBREDDITS,
+    GITHUB_SCRAPE_ENABLED,
+    GITHUB_REPOS,
+    PRODUCT_HUNT_SCRAPE_ENABLED,
+    FIVERR_SCRAPE_ENABLED,
+    FIVERR_QUERIES,
+    UPWORK_SCRAPE_ENABLED,
+    UPWORK_QUERIES,
+    G2_SCRAPE_ENABLED,
+    G2_CATEGORIES,
+    CAPTERRA_SCRAPE_ENABLED,
+    CAPTERRA_CATEGORIES,
 )
 from product_idea_miner.tools import reddit_tool, tinyfish_tool, supabase_tool, hn_tool, webhook_tool, status_tool
+from product_idea_miner.tools import github_tool, product_hunt_tool, fiverr_tool, upwork_tool
 from product_idea_miner.agents import crewai_crew
 
 tracker = status_tool.tracker
@@ -83,26 +95,74 @@ def _manual_candidate_record(post, score: int) -> IdeaRecord:
 
 def scrape_node(state: PipelineState) -> PipelineState:
     logger.info("Scraping sources")
-    tracker.update_step("Scraping Reddit, Hacker News, and Quora...", 10)
+    tracker.update_step("Scraping Reddit, Hacker News, Quora, GitHub, Product Hunt, Fiverr, Upwork...", 10)
     reddit_posts = reddit_tool.scrape_reddit(SUBREDDITS, PAIN_POINT_KEYWORDS)
     tracker.add_log_msg(f"Reddit scrape completed: found {len(reddit_posts)} candidates.")
-    
+
     quora_posts = tinyfish_tool.scrape_quora(QUORA_SEARCHES) if QUORA_SCRAPE_ENABLED else []
     if QUORA_SCRAPE_ENABLED:
         tracker.add_log_msg(f"Quora scrape completed: found {len(quora_posts)} candidates.")
-        
+
     hn_posts = hn_tool.scrape_hn()
     tracker.add_log_msg(f"Hacker News scrape completed: found {len(hn_posts)} candidates.")
 
-    state.raw_posts = reddit_posts + quora_posts + hn_posts
+    github_posts = []
+    if GITHUB_SCRAPE_ENABLED:
+        try:
+            github_posts = github_tool.scrape_github(GITHUB_REPOS)
+            tracker.add_log_msg(f"GitHub Issues scrape completed: found {len(github_posts)} candidates.")
+        except Exception as e:
+            logger.warning("GitHub scraper failed: %s", e)
+            tracker.add_log_msg(f"GitHub scraper failed: {e}")
+
+    product_hunt_posts = []
+    if PRODUCT_HUNT_SCRAPE_ENABLED:
+        try:
+            product_hunt_posts = product_hunt_tool.scrape_product_hunt(limit=10)
+            tracker.add_log_msg(f"Product Hunt scrape completed: found {len(product_hunt_posts)} launches.")
+        except Exception as e:
+            logger.warning("Product Hunt scraper failed: %s", e)
+            tracker.add_log_msg(f"Product Hunt scraper failed: {e}")
+
+    fiverr_posts = []
+    if FIVERR_SCRAPE_ENABLED:
+        try:
+            fiverr_posts = fiverr_tool.scrape_fiverr(FIVERR_QUERIES)
+            tracker.add_log_msg(f"Fiverr scrape completed: found {len(fiverr_posts)} gigs.")
+        except Exception as e:
+            logger.warning("Fiverr scraper failed: %s", e)
+            tracker.add_log_msg(f"Fiverr scraper failed: {e}")
+
+    upwork_posts = []
+    if UPWORK_SCRAPE_ENABLED:
+        try:
+            upwork_posts = upwork_tool.scrape_upwork(UPWORK_QUERIES)
+            tracker.add_log_msg(f"Upwork scrape completed: found {len(upwork_posts)} jobs.")
+        except Exception as e:
+            logger.warning("Upwork scraper failed: %s", e)
+            tracker.add_log_msg(f"Upwork scraper failed: {e}")
+
+    # G2 and Capterra are disabled by default (low reliability without proxies)
+    g2_posts = []
+    capterra_posts = []
+
+    state.raw_posts = (
+        reddit_posts + quora_posts + hn_posts
+        + github_posts + product_hunt_posts
+        + fiverr_posts + upwork_posts
+        + g2_posts + capterra_posts
+    )
     tracker.set_stats(scraped=len(state.raw_posts))
-    tracker.add_log_msg(f"Total raw posts scraped: {len(state.raw_posts)}.")
+    tracker.add_log_msg(
+        f"Total raw posts scraped: {len(state.raw_posts)} "
+        f"(Reddit: {len(reddit_posts)}, HN: {len(hn_posts)}, Quora: {len(quora_posts)}, "
+        f"GitHub: {len(github_posts)}, PH: {len(product_hunt_posts)}, "
+        f"Fiverr: {len(fiverr_posts)}, Upwork: {len(upwork_posts)})."
+    )
     logger.info(
-        "Scraped %s posts total (Reddit: %s, Quora: %s, HN: %s)",
-        len(state.raw_posts),
-        len(reddit_posts),
-        len(quora_posts),
-        len(hn_posts),
+        "Scraped %s posts total (Reddit: %s, Quora: %s, HN: %s, GitHub: %s, PH: %s, Fiverr: %s, Upwork: %s)",
+        len(state.raw_posts), len(reddit_posts), len(quora_posts), len(hn_posts),
+        len(github_posts), len(product_hunt_posts), len(fiverr_posts), len(upwork_posts),
     )
     return state
 

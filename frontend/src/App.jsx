@@ -6,7 +6,8 @@ import Stats from './components/Stats';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import IdeaPlaygroundDrawer from './components/IdeaPlaygroundDrawer';
 import ScraperStatusConsole from './components/ScraperStatusConsole';
-import { Search, SlidersHorizontal, AlertCircle, Compass, BarChart2 } from 'lucide-react';
+import ScrapersMonitor from './pages/ScrapersMonitor';
+import { Search, SlidersHorizontal, AlertCircle, Compass, BarChart2, Radio } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -173,6 +174,18 @@ function App() {
             <BarChart2 className="h-4 w-4" />
             <span>Analytics Dashboard</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('scrapers')}
+            className={`flex items-center space-x-2 py-4 border-b-2 font-bold text-xs uppercase tracking-wider transition-colors ${
+              activeTab === 'scrapers'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Radio className="h-4 w-4" />
+            <span>Scrapers Monitor</span>
+          </button>
         </div>
       </div>
 
@@ -282,6 +295,11 @@ function App() {
         {/* Tab 2: Analytics Dashboard */}
         {activeTab === 'analytics' && (
           <AnalyticsDashboard ideas={ideas} />
+        )}
+
+        {/* Tab 3: Scrapers Monitor */}
+        {activeTab === 'scrapers' && (
+          <ScrapersMonitor />
         )}
       </main>
 

@@ -8,6 +8,12 @@ class Source(str, Enum):
     REDDIT = "reddit"
     QUORA = "quora"
     HN = "hn"
+    GITHUB = "github"
+    PRODUCT_HUNT = "product_hunt"
+    FIVERR = "fiverr"
+    UPWORK = "upwork"
+    G2 = "g2"
+    CAPTERRA = "capterra"
 
 # One product idea suggested by CrewAI
 class ProductIdea(BaseModel):

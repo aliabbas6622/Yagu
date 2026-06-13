@@ -15,6 +15,14 @@ class AppSettings(BaseSettings):
     tinyfish_api_key: str | None = None
     quora_scrape_enabled: bool = False
 
+    # Crawlee-based scrapers (require playwright install)
+    github_scrape_enabled: bool = True
+    product_hunt_scrape_enabled: bool = True
+    fiverr_scrape_enabled: bool = True
+    upwork_scrape_enabled: bool = True
+    g2_scrape_enabled: bool = False      # Low reliability, off by default
+    capterra_scrape_enabled: bool = False # Low reliability, off by default
+
     # AI providers
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
@@ -82,6 +90,14 @@ REDDIT_USE_SCRAPLING_FALLBACK = settings.reddit_use_scrapling_fallback
 # TinyFish
 TINYFISH_API_KEY = settings.tinyfish_api_key
 QUORA_SCRAPE_ENABLED = settings.quora_scrape_enabled
+
+# Crawlee scrapers
+GITHUB_SCRAPE_ENABLED = settings.github_scrape_enabled
+PRODUCT_HUNT_SCRAPE_ENABLED = settings.product_hunt_scrape_enabled
+FIVERR_SCRAPE_ENABLED = settings.fiverr_scrape_enabled
+UPWORK_SCRAPE_ENABLED = settings.upwork_scrape_enabled
+G2_SCRAPE_ENABLED = settings.g2_scrape_enabled
+CAPTERRA_SCRAPE_ENABLED = settings.capterra_scrape_enabled
 
 # AI provider keys
 ANTHROPIC_API_KEY = settings.anthropic_api_key
@@ -189,3 +205,31 @@ QUORA_SEARCHES = [
     "I need a tool that can",
     "frustrated with current tools"
 ]
+
+# GitHub repos to scrape for open issues (pain points)
+GITHUB_REPOS = [
+    "fastapi/fastapi",
+    "langchain-ai/langchain",
+    "supabase/supabase",
+    "n8n-io/n8n",
+    "nocodb/nocodb",
+]
+
+# Fiverr gig categories to search
+FIVERR_QUERIES = [
+    "automation tool",
+    "SaaS development",
+    "web scraping service",
+    "AI chatbot",
+]
+
+# Upwork job queries
+UPWORK_QUERIES = [
+    "build automation tool",
+    "SaaS MVP development",
+    "web scraping project",
+]
+
+# G2 / Capterra product categories
+G2_CATEGORIES = ["crm", "project-management", "marketing-automation"]
+CAPTERRA_CATEGORIES = ["crm", "project-management"]

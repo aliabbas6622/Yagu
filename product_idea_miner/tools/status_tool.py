@@ -11,6 +11,8 @@ class ScraperStatusTracker:
         self.logs: List[Dict[str, Any]] = []
         self.stats: Dict[str, int] = {"scraped": 0, "saved": 0}
         self.error: str | None = None
+        self.last_run: str | None = None
+        self.last_result: Dict[str, Any] | None = None
 
     def start_run(self):
         with self._lock:
@@ -43,6 +45,8 @@ class ScraperStatusTracker:
         with self._lock:
             self.status = "idle"
             self.progress = 100
+            self.last_run = datetime.now().isoformat()
+            self.last_result = {"saved": saved_count, "error": error_msg}
             if error_msg:
                 self.error = error_msg
                 self.current_step = "Failed"
@@ -61,6 +65,8 @@ class ScraperStatusTracker:
                 "logs": self.logs[-100:],  # limit to last 100 log messages
                 "stats": self.stats,
                 "error": self.error,
+                "last_run": self.last_run,
+                "last_result": self.last_result,
             }
 
     def _log(self, message: str):

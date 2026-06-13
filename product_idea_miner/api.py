@@ -94,15 +94,23 @@ async def get_stats():
         total_res = supabase.table("ideas").select("id", count="exact").execute()
         total_count = total_res.count if total_res.count is not None else 0
 
-        # Average score
-        avg_res = supabase.table("ideas").select("total_score").execute()
-        scores = [item["total_score"] for item in avg_res.data if item["total_score"] is not None]
+        # Average score and source breakdown
+        res = supabase.table("ideas").select("source, total_score").execute()
+        scores = [item["total_score"] for item in res.data if item["total_score"] is not None]
         avg_score = sum(scores) / len(scores) if scores else 0
+
+        source_breakdown = {}
+        for item in res.data:
+            source = item.get("source")
+            if source:
+                source = source.lower()
+                source_breakdown[source] = source_breakdown.get(source, 0) + 1
 
         return {
             "total_ideas": total_count,
             "average_score": round(avg_score, 2),
-            "top_category": "TBD"
+            "top_category": "TBD",
+            "source_breakdown": source_breakdown
         }
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
